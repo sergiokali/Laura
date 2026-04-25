@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lighting Plot - Visualizer</title>
+<style>
+  :root {
+    --bg-dark: #121212;
+    --card-bg: #1e1e1e;
+    --text-main: #e0e0e0;
+    --text-muted: #a0a0a0;
+    --accent: #4a90e2;
+
+    --cool-wash: rgba(135, 206, 250, 0.6);
+    --cool-wash-dim: rgba(135, 206, 250, 0.3);
+    --cool-full: rgba(173, 216, 230, 0.9);
+    --warm-wash: rgba(255, 165, 0, 0.6);
+    --warm-dim: rgba(255, 165, 0, 0.2);
+    --warm-spot: rgba(255, 140, 0, 0.8);
+    --white-beam: rgba(255, 255, 255, 0.9);
+    --blackout: rgba(0, 0, 0, 0.95);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    padding: 2rem 1rem;
+    overflow-x: hidden;
+  }
+  header { text-align: center; margin-bottom: 3rem; padding: 0 1rem; }
+  header h1 { font-weight: 300; letter-spacing: 1px; font-size: clamp(1.5rem, 5vw, 2.5rem); }
+
+  .cues-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+    gap: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 1rem;
+  }
+
+  .card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    border: 2px solid transparent;
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+  }
+
+  .card-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .cues-container.slideshow-mode {
+    display: grid;
+    grid-template-areas: "slide";
+    justify-content: center;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  
+  .cues-container.slideshow-mode .card {
+    grid-area: slide;
+    width: 100%;
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.95) translateY(15px);
+    transition: opacity 1s ease-in-out, transform 1s ease-in-out;
+  }
+
+  .cues-container.slideshow-mode .card.active {
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1) translateY(0);
+    z-index: 10;
+  }
+
+  .cue-title { font-size: 1.25rem; font-weight: 600; }
+  .cue-time { color: var(--accent); font-family: monospace; font-size: 1.1rem; }
+  
+  .stage-container {
+    padding: 2rem;
+    display: flex;
+    justify-content: center;
+    background: #111;
+  }
+
+  .stage {
+    width: 200px;
+    height: 200px;
+    background: #000;
+    border: 2px solid #444;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stage::after {
+    content: 'AUDIENCE';
+    position: absolute;
+    bottom: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    font-weight: 900;
+    color: #000;
+    letter-spacing: 2px;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.5);
+    padding: 2px 6px;
+    border-radius: 2px;
+  }
+
+  /* Info sections */
+  .info-section {
+    padding: 1.5rem;
+    background: #1a1a1a;
+  }
+
+  .info-tabs {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .tab-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+  
+  .tab-btn.active {
+    color: var(--text-main);
+    border-color: var(--accent);
+  }
+
+  .tab-content { display: none; font-size: 0.9rem; line-height: 1.5; color: #ccc; }
+  .tab-content.active { display: block; }
+  
+  /* Shared Lighting Layer Base */
+  .light { position: absolute; top: 0; left: 0; right: 0; bottom: 0; transition: all 1s ease; mix-blend-mode: screen; pointer-events: none;}
+  
+  /* --- Cue Specific Styles --- */
+  
+  /* Cue 1 */
+  .c1-wash { background: linear-gradient(180deg, var(--cool-wash) 0%, var(--cool-wash) 100%); }
+  .c1-side { box-shadow: inset 40px 0 30px -10px var(--cool-wash), inset -40px 0 30px -10px var(--cool-wash); }
+  .c1-spot-ul { background: radial-gradient(circle at 20% 20%, var(--white-beam) 0%, transparent 40%); }
+  .c1-spot-ur { background: radial-gradient(circle at 80% 20%, var(--white-beam) 0%, transparent 40%); }
+
+  /* Cue 2 */
+  .c2-wash { background: linear-gradient(180deg, var(--cool-wash) 0%, var(--cool-wash) 100%); }
+  .c2-side { box-shadow: inset 40px 0 30px -10px var(--cool-wash), inset -40px 0 30px -10px var(--cool-wash); }
+  .c2-moving { background: radial-gradient(circle at 50% 50%, rgba(135,206,250,0.4) 0%, transparent 60%); animation: drift 8s infinite alternate ease-in-out; }
+
+  /* Cue 3 */
+  .c3-wash-front { background: linear-gradient(0deg, var(--warm-wash) 0%, transparent 70%); }
+  .c3-wash-backmid { background: linear-gradient(180deg, var(--cool-wash-dim) 0%, var(--cool-wash-dim) 30%, transparent 100%); }
+  .c3-side { box-shadow: inset 20px 0 20px -10px var(--cool-wash-dim), inset -20px 0 20px -10px var(--cool-wash-dim); }
+  
+  /* Cue 4 */
+  .c4-snap { background: var(--cool-full); animation: snapFlash 0.2s ease-out; }
+  
+  /* Cue 5 */
+  .c5-wash-warm { background: linear-gradient(180deg, var(--warm-wash) 0%, var(--warm-wash) 100%); }
+  .c5-side-warm { box-shadow: inset 40px 0 30px -10px var(--warm-wash), inset -40px 0 30px -10px var(--warm-wash); }
+  
+  /* Cue 6 */
+  .c6-dim-wash { background: linear-gradient(180deg, var(--warm-dim) 0%, transparent 30%, transparent 70%, var(--warm-dim) 100%); }
+  .c6-side-dim { box-shadow: inset 10px 0 10px -5px var(--warm-dim), inset -10px 0 10px -5px var(--warm-dim); }
+  .c6-center { background: radial-gradient(circle at 50% 50%, var(--warm-wash) 0%, transparent 70%); }
+  
+  /* Cue 7 */
+  .c7-spot-tight { background: radial-gradient(circle at 50% 50%, var(--warm-spot) 0%, transparent 30%); animation: fadeOutBlack 8s forwards 2s; }
+  
+  /* Animations */
+  @keyframes drift {
+    0% { transform: translate(-20px, -20px) scale(1); }
+    100% { transform: translate(20px, 20px) scale(1.2); }
+  }
+  @keyframes track {
+    0% { transform: translate(-30px, 0px); }
+    100% { transform: translate(30px, 0px); }
+  }
+  @keyframes snapFlash {
+    0% { background: transparent; }
+    10% { background: #fff; }
+    100% { background: var(--cool-full); }
+  }
+  @keyframes fadeOutBlack {
+    to { background: transparent; }
+  }
+
+</style>
+</head>
+<body>
+
+<header>
+  <h1>LIGHTING PLOT VISUALIZER</h1>
+  <p style="color: var(--text-muted); margin-top: 0.5rem;">Interactive stage lighting representation</p>
+</header>
+
+<section class="timeline-controls" style="text-align: center; margin: 0 1rem 2rem; background: var(--card-bg); padding: 1.5rem 1rem; border-radius: 12px; max-width: 800px; margin-left: auto; margin-right: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.5);">
+  <audio id="audio-player" src="asturias.mp3" preload="metadata"></audio>
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+    <button id="play-pause-btn" style="padding: 10px 15px; border-radius: 6px; border: none; background: var(--accent); color: white; cursor: pointer; font-weight: bold; width: 70px;">Play</button>
+    <div style="display: flex; align-items: center; flex: 1 1 200px; gap: 0.5rem;">
+      <span id="time-display" style="font-family: monospace; font-size: 1rem; min-width: 40px; text-align: right;">0:00</span>
+      <input type="range" id="time-slider" min="0" max="402" value="0" style="flex-grow: 1; cursor: pointer; width: 100%;">
+      <span style="font-family: monospace; font-size: 1rem; min-width: 40px; text-align: left;">6:42</span>
+    </div>
+  </div>
+  <p style="color: var(--text-muted); font-size: 0.85rem;">Slide the timeline to scrub through the music and cue states.</p>
+</section>
+
+<div class="cues-container slideshow-mode" id="slideshow-view">
+  <!-- Interactive visual slider populated by JS -->
+</div>
+
+<h2 style="text-align: center; margin: 4rem 0 2rem; font-weight: 300; letter-spacing: 2px; color: var(--accent);">ALL CUES</h2>
+
+<main class="cues-container" id="grid-view">
+
+  <!-- CUE 1 -->
+  <article class="card">
+    <div class="card-header">
+      <span class="cue-title">Cue 1</span>
+      <span class="cue-time">0:00</span>
+    </div>
+    <div class="stage-container">
+      <div class="stage">
+        <div class="light c1-wash"></div>
+        <div class="light c1-side"></div>
+        <div class="light c1-spot-ul"></div>
+        <div class="light c1-spot-ur"></div>
+      </div>
+    </div>
+    <div class="info-section">
+      <div class="info-tabs">
+        <button class="tab-btn active" onclick="switchTab(this, 'c1-design')">Designer</button>
+        <button class="tab-btn" onclick="switchTab(this, 'c1-tech')">Technician</button>
+      </div>
+      <div id="c1-design" class="tab-content active">The three horizontal lights (front, middle, and back) and all side lights are saturated in a sharp, even cool wash. Slicing through this stark ambiance, two corner spotlights (upstage left and upstage right) strike the floor in piercing, tightly focused white beams.</div>
+      <div id="c1-tech" class="tab-content"><pre style="font-family: monospace; white-space: pre-wrap;">Horizontal (All): Cool 100%
+Side: Cool 100%
+Corner Spot (UL, UR): White 100%
+Center/Moving: 0%</pre></div>
+    </div>
+  </article>
+
+  <!-- CUE 2 -->
+  <article class="card">
+    <div class="card-header">
+      <span class="cue-title">Cue 2</span>
+      <span class="cue-time">0:28</span>
+    </div>
+    <div class="stage-container">
+      <div class="stage">
+        <div class="light c2-wash"></div>
+        <div class="light c2-side"></div>
+        <div class="light c2-moving"></div>
+      </div>
+    </div>
+    <div class="info-section">
+      <div class="info-tabs">
+        <button class="tab-btn active" onclick="switchTab(this, 'c2-design')">Designer</button>
+        <button class="tab-btn" onclick="switchTab(this, 'c2-tech')">Technician</button>
+      </div>
+      <div id="c2-design" class="tab-content active">The two stark white corner spotlights gently execute a slow fade to zero. The stage is left immersed in the expansive cool wash from the horizontal and side fixtures. To heighten the psychological shift, the moving top lights are introduced in a cool tone, sweeping in a barely perceptible restless drift.</div>
+      <div id="c2-tech" class="tab-content"><pre style="font-family: monospace; white-space: pre-wrap;">Corner Spots: Fade to 0%
+Horizontal/Side: Cool 100%
+Moving Top: Cool 40% (drift)
+Center: 0%</pre></div>
+    </div>
+  </article>
+
+  <!-- CUE 3 -->
+  <article class="card">
+    <div class="card-header">
+      <span class="cue-title">Cue 3</span>
+      <span class="cue-time">1:05</span>
+    </div>
+    <div class="stage-container">
+      <div class="stage">
+        <div class="light c3-wash-front"></div>
+        <div class="light c3-wash-backmid"></div>
+        <div class="light c3-side"></div>
+      </div>
+    </div>
+    <div class="info-section">
+      <div class="info-tabs">
+        <button class="tab-btn active" onclick="switchTab(this, 'c3-design')">Designer</button>
+        <button class="tab-btn" onclick="switchTab(this, 'c3-tech')">Technician</button>
+      </div>
+      <div id="c3-design" class="tab-content active">The bottom/front horizontal light bleeds into a rich warm tone, washing deep into the stage to give the dancers more space to move. The cool wash from the back horizontal light dims by 70%, allowing side lights to sculpt the dancers while the expansive warm front light draws the eye.</div>
+      <div id="c3-tech" class="tab-content"><pre style="font-family: monospace; white-space: pre-wrap;">Horizontal Front & Mid: Warm 100%
+Horizontal Back: Cool 30%
+Side: Cool 70%
+Moving Top: Cool 40%
+Center/Corners: 0%</pre></div>
+    </div>
+  </article>
+
+  <!-- CUE 4 -->
+  <article class="card">
+    <div class="card-header">
+      <span class="cue-title">Cue 4</span>
+      <span class="cue-time">1:43</span>
+    </div>
+    <div class="stage-container">
+      <div class="stage">
+        <div class="light c4-snap"></div>
+      </div>
+    </div>
+    <div class="info-section">
+      <div class="info-tabs">
+        <button class="tab-btn active" onclick="switchTab(this, 'c4-design')">Designer</button>
+        <button class="tab-btn" onclick="switchTab(this, 'c4-tech')">Technician</button>
+      </div>
+      <div id="c4-design" class="tab-content active">A violent, instantaneous snap execution. The warm bottom horizontal light abruptly cuts to black. Instantly, all side lights, the three horizontal lights, and moving top lights flash to maximum intensity in a brilliant, blinding cool wash.</div>
+      <div id="c4-tech" class="tab-content"><pre style="font-family: monospace; white-space: pre-wrap;">Horizontal Front: Snap 0%, then flash Cool 100%.
+Horizontal Mid/Back/Side: Snap Cool 100%
+Moving Top: Snap Cool 100%.</pre></div>
+    </div>
+  </article>
+
+  <!-- CUE 5 -->
+  <article class="card">
+    <div class="card-header">
+      <span class="cue-title">Cue 5</span>
+      <span class="cue-time">4:01</span>
+    </div>
+    <div class="stage-container">
+      <div class="stage">
+        <div class="light c5-wash-warm"></div>
+        <div class="light c5-side-warm"></div>
+      </div>
+    </div>
+    <div class="info-section">
+      <div class="info-tabs">
+        <button class="tab-btn active" onclick="switchTab(this, 'c5-design')">Designer</button>
+        <button class="tab-btn" onclick="switchTab(this, 'c5-tech')">Technician</button>
+      </div>
+      <div id="c5-design" class="tab-content active">A deeply gradual transition. The entire stage is basked in a solid warm light. Low-angle side lights crossfade from cool to warm to complete the enveloping atmosphere. Moving top lights are removed to keep the space grounded.</div>
+      <div id="c5-tech" class="tab-content"><pre style="font-family: monospace; white-space: pre-wrap;">Horizontal All: Warm 60%
+Side: Warm 60%.
+Moving Top: 0%.</pre></div>
+    </div>
+  </article>
+
+  <!-- CUE 6 -->
+  <article class="card">
+    <div class="card-header">
+      <span class="cue-title">Cue 6</span>
+      <span class="cue-time">5:44</span>
+    </div>
+    <div class="stage-container">
+      <div class="stage">
+        <div class="light c6-dim-wash"></div>
+        <div class="light c6-side-dim"></div>
+        <div class="light c6-center"></div>
+      </div>
+    </div>
+    <div class="info-section">
+      <div class="info-tabs">
+        <button class="tab-btn active" onclick="switchTab(this, 'c6-design')">Designer</button>
+        <button class="tab-btn" onclick="switchTab(this, 'c6-tech')">Technician</button>
+      </div>
+      <div id="c6-design" class="tab-content active">The horizontal backdrop and front lights recede to a whisper. Side lights remain in very dim warm state. Above, the center spotlight slowly blooms into a diffused, soft-edged warm pool.</div>
+      <div id="c6-tech" class="tab-content"><pre style="font-family: monospace; white-space: pre-wrap;">Horizontal Front/Back: Warm 10%.
+Horizontal Mid: 0%.
+Side: Warm 20%.
+Center Spot: Warm 70% (wide).
+Moving: 0%.</pre></div>
+    </div>
+  </article>
+
+  <!-- CUE 7 -->
+  <article class="card">
+    <div class="card-header">
+      <span class="cue-title">Cue 7</span>
+      <span class="cue-time">6:30</span>
+    </div>
+    <div class="stage-container">
+      <div class="stage" style="background: black;">
+        <div class="light c7-spot-tight"></div>
+      </div>
+    </div>
+    <div class="info-section">
+      <div class="info-tabs">
+        <button class="tab-btn active" onclick="switchTab(this, 'c7-design')">Designer</button>
+        <button class="tab-btn" onclick="switchTab(this, 'c7-tech')">Technician</button>
+      </div>
+      <div id="c7-design" class="tab-content active">Side lights bleed away into absolute shadow. Only the center spotlight remains, tightly irised down on the dancers in an intense, heavy warm hue. It then fades to black.</div>
+      <div id="c7-tech" class="tab-content"><pre style="font-family: monospace; white-space: pre-wrap;">Side/Horizontal: 0%.
+Center Spot: Warm 70% (tight), then slow fade to 0% (Blackout).</pre></div>
+    </div>
+  </article>
+
+</main>
+
+<script>
+  function switchTab(btn, targetId) {
+    const card = btn.closest('.info-section');
+    card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    card.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    
+    btn.classList.add('active');
+    document.getElementById(targetId).classList.add('active');
+  }
+
+  const gridCards = document.querySelectorAll('#grid-view .card');
+  const slideshowView = document.getElementById('slideshow-view');
+  const slideCards = [];
+
+  // Generate slideshow cards dynamically strictly displaying the visual stages
+  gridCards.forEach((card, index) => {
+    const slideCard = document.createElement('article');
+    slideCard.className = 'card';
+    slideCard.appendChild(card.querySelector('.stage-container').cloneNode(true));
+    slideshowView.appendChild(slideCard);
+    slideCards.push(slideCard);
+  });
+
+  const audio = document.getElementById('audio-player');
+  const slider = document.getElementById('time-slider');
+  const playPauseBtn = document.getElementById('play-pause-btn');
+  const timeDisplay = document.getElementById('time-display');
+  
+  // Timing data strictly based on the provided cue list (duration: 6m42s)
+  const cues = [
+    { time: 0, index: 0 },   // Cue 1: 0:00
+    { time: 28, index: 1 },  // Cue 2: 0:28
+    { time: 65, index: 2 },  // Cue 3: 1:05
+    { time: 103, index: 3 }, // Cue 4: 1:43
+    { time: 241, index: 4 }, // Cue 5: 4:01
+    { time: 344, index: 5 }, // Cue 6: 5:44
+    { time: 390, index: 6 }  // Cue 7: 6:30
+  ];
+
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  function updateActiveCue(timeSec) {
+    let activeIndex = 0;
+    for (let i = cues.length - 1; i >= 0; i--) {
+      if (timeSec >= cues[i].time) {
+        activeIndex = cues[i].index;
+        break;
+      }
+    }
+    
+    slideCards.forEach((card, index) => {
+      if (index === activeIndex) {
+        card.classList.add('active');
+      } else {
+        card.classList.remove('active');
+      }
+    });
+
+    gridCards.forEach((card, index) => {
+      if (index === activeIndex) {
+        card.style.borderColor = 'var(--accent)';
+        card.style.boxShadow = '0 0 20px rgba(74, 144, 226, 0.4)';
+      } else {
+        card.style.borderColor = 'transparent';
+        card.style.boxShadow = '0 8px 24px rgba(0,0,0,0.5)';
+      }
+    });
+  }
+
+  playPauseBtn.addEventListener('click', () => {
+    if (audio.paused) {
+      audio.play().catch(e => alert("Please ensure 'asturias.mp3' is present in the folder. Exception: " + e));
+      playPauseBtn.textContent = 'Pause';
+    } else {
+      audio.pause();
+      playPauseBtn.textContent = 'Play';
+    }
+  });
+
+  slider.addEventListener('input', (e) => {
+    const time = parseInt(e.target.value);
+    audio.currentTime = time;
+    timeDisplay.textContent = formatTime(time);
+    updateActiveCue(time);
+  });
+
+  audio.addEventListener('timeupdate', () => {
+    const time = Math.floor(audio.currentTime);
+    slider.value = time;
+    timeDisplay.textContent = formatTime(time);
+    updateActiveCue(time);
+  });
+
+  // Initialize the slideshow to Cue 1 at 0:00
+  updateActiveCue(0);
+</script>
+
+</body>
+</html>
