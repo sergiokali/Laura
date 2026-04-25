@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("💡 The Weight of Us - Lighting Plot")
+st.title("💡 Through Knots and Ties")
 st.markdown("Interactive lighting visualization by Laura ")
 
 # Path to the HTML file
