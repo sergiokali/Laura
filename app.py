@@ -10,6 +10,15 @@ st.set_page_config(
     layout="wide"
 )
 
+# Match background color with lighting-plot.html
+st.markdown("""
+<style>
+    .stApp {
+        background-color: #121212;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("💡 Through Knots and Ties")
 st.markdown("Interactive lighting visualization by Laura ")
 
